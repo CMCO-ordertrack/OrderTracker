@@ -398,21 +398,15 @@ function handleAction(action) {
         return;
     }
 
+    // Open the form directly
     const link = CONFIG.FORM_URLS[action];
-    const linkElement = document.createElement("a");
-    linkElement.href = link;
-    linkElement.target = "_blank";
-    linkElement.textContent = "Open " + action.charAt(0).toUpperCase() + action.slice(1) + " Form";
+    window.open(link, '_blank');
     
-    linkElement.onclick = function () {
-        showMessage('successMsg', `${action.charAt(0).toUpperCase() + action.slice(1)} form opened. Status will update after form submission.`);
-        
-        setTimeout(() => {
-            checkStatus();
-        }, 5000); // Increased to 5 seconds for GitHub Pages
-    };
+    showMessage('successMsg', `${action.charAt(0).toUpperCase() + action.slice(1)} form opened. Status will update after form submission.`);
     
-    formLink.appendChild(linkElement);
+    setTimeout(() => {
+        checkStatus();
+    }, 5000); // Increased to 5 seconds for GitHub Pages
 }
 
 document.addEventListener("DOMContentLoaded", function () {
