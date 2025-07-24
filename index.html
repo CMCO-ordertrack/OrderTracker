@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+ 
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>CMCO Order Tracker</title>
+<style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f4f7f9;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 600px;
+            margin: 60px auto;
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        h2 {
+            text-align: center;
+            color: #333;
+        }
+        label {
+            display: block;
+            margin-top: 20px;
+            font-weight: bold;
+            color: #555;
+        }
+        input, select {
+            width: 100%;
+            padding: 10px;
+            margin-top: 6px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        .button-group {
+            margin-top: 30px;
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        button {
+            flex: 1;
+            padding: 12px;
+            font-size: 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+        button:hover {
+            opacity: 0.9;
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .start { background-color: #4CAF50; color: white; }
+        .pause { background-color: #f0ad4e; color: white; }
+        .resume { background-color: #0275d8; color: white; }
+        .finish { background-color: #d9534f; color: white; }
+        .refresh { background-color: #6c757d; color: white; margin-top: 10px; }
+        .link-container {
+            margin-top: 20px;
+            text-align: center;
+        }
+        .link-container a {
+            display: inline-block;
+            margin-top: 10px;
+            color: #007bff;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        .link-container a:hover {
+            text-decoration: underline;
+        }
+        .error {
+            color: red;
+            margin-top: 10px;
+            text-align: center;
+        }
+        .success {
+            color: green;
+            margin-top: 10px;
+            text-align: center;
+        }
+        .loading {
+            color: #007bff;
+            margin-top: 10px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+<h2>CMCO Order Tracker</h2>
+<label for="workOrder">Work Order Number</label>
+<input id="workOrder" placeholder="Enter Work Order Number" type="text" oninput="debouncedStatusCheck()"/>
+<label for="partNumber">Part Number</label>
+<input id="partNumber" placeholder="Enter Part Number" type="text" oninput="debouncedStatusCheck()"/>
+<div>
+<label for="productLine">Product Line:</label>
+<select id="productLine" onchange="updateStations(); debouncedStatusCheck();">
+<option value="">--Select Product Line--</option>
+<option value="Controls">Controls</option>
+<option value="Radio">Radio</option>
+<option value="AE">AE</option>
+<option value="Brakes">Brakes</option>
+<option value="Electrification">Electrification</option>
+<option value="Elevator">Elevator</option>
+<option value="ElevatorRepair">Elevator Repair</option>
+<option value="FieldService">Field Service</option>
+<option value="MHComponents">MH Components</option>
+<option value="Mining">Mining</option>
+<option value="RadioModifications">Radio Modifications</option>
+<option value="RadioRepair">Radio Repair</option>
+<option value="BrakesRepair">Brakes Repair</option>
+</select>
+</div>
+<div>
+<label for="station">Station:</label>
+<select id="station" onchange="debouncedStatusCheck()">
+<option value="">--Select Station--</option>
+</select>
+</div>
+<script>
+  const stationOptions = {
+    Controls: ["Water spider", "CNC", "Assembly", "Control/Wiring", "Power Wiring", "Continuity Check", "Encloser Wiring", "Quality Check", "Testing"],
+    Radio: ["Radio Station 1", "Radio Station 2", "Radio Station 3"],
+    AE: ["Water spider", "Assembly", "Testing"],
+    Brakes: ["Brakes Station"],
+    Electrification: ["Electrification Station"],
+    Elevator: ["Elevator Station"],
+    ElevatorRepair: ["Elevator Repair Station"],
+    FieldService: ["Field Service Station"],
+    MHComponents: ["MH Components Station"],
+    Mining: ["Mining Station"],
+    RadioModifications: ["Radio Modifications Station"],
+    RadioRepair: ["Radio Repair Station"],
+    BrakesRepair: ["Brakes Repair Station"],
+  };
+
+  function updateStations() {
+    const productLine = document.getElementById("productLine").value;
+    const stationSelect = document.getElementById("station");
+    stationSelect.innerHTML = '<option value="">--Select Station--</option>';
+    if (stationOptions[productLine]) {
+      stationOptions[productLine].forEach(station => {
+        const option = document.createElement("option");
+        option.value = station;
+        option.textContent = station;
+        stationSelect.appendChild(option);
+      });
+    }
+  }
+</script>
+</div>
+<div class="button-group">
+<button class="start" onclick="handleAction('start')" id="startBtn">Start</button>
+<button class="pause" onclick="handleAction('pause')" id="pauseBtn">Pause</button>
+<button class="resume" onclick="handleAction('resume')" id="resumeBtn">Resume</button>
+<button class="finish" onclick="handleAction('finish')" id="finishBtn">Finish</button>
+</div>
+<button class="refresh" onclick="checkStatus()" style="width: 100%;">Refresh Status</button>
+<div class="link-container" id="formLink"></div>
+<div class="error" id="errorMsg"></div>
+<div class="success" id="successMsg"></div>
+<div class="loading" id="loadingMsg"></div>
+<div id="statusDisplay" style="margin-top: 20px; text-align: center; font-weight: bold; color: #333;">Status: Not Started</div>
+</div>
+
+<script>
+const CONFIG = {
+    // GitHub Pages will serve the JSON file directly
+    JSON_DATA_URL: "order_statuses.json",
+    
+    FORM_URLS: {
+        start: "https://forms.office.com/Pages/ResponsePage.aspx?id=bJDaWsWrmkin1el3TfKTOrXFXAOaO9VHv8sfFTPvnKFUNlhBR0U5UzdMOEhRODRWNzQ0ODRRU1hDRiQlQCN0PWcu&rc98df112c78e4102ae532905b6d4a89f=%22Start%20order%22",
+        pause: "https://forms.office.com/Pages/ResponsePage.aspx?id=bJDaWsWrmkin1el3TfKTOrXFXAOaO9VHv8sfFTPvnKFUNlhBR0U5UzdMOEhRODRWNzQ0ODRRU1hDRiQlQCN0PWcu&rc98df112c78e4102ae532905b6d4a89f=%22Pause%20order%22",
+        resume: "https://forms.office.com/Pages/ResponsePage.aspx?id=bJDaWsWrmkin1el3TfKTOrXFXAOaO9VHv8sfFTPvnKFUNlhBR0U5UzdMOEhRODRWNzQ0ODRRU1hDRiQlQCN0PWcu&rc98df112c78e4102ae532905b6d4a89f=%22Resume%20order%22",
+        finish: "https://forms.office.com/Pages/ResponsePage.aspx?id=bJDaWsWrmkin1el3TfKTOrXFXAOaO9VHv8sfFTPvnKFUNlhBR0U5UzdMOEhRODRWNzQ0ODRRU1hDRiQlQCN0PWcu&rc98df112c78e4102ae532905b6d4a89f=%22Finish%20order%22"
+    }
+};
+
+let debounceTimer;
+let currentStatus = "Not Started";
+let jsonData = null; 
+
+function convertStatusFromJSON(jsonStatus) {
+    switch(jsonStatus) {
+        case 'Start order': return 'Started';
+        case 'Pause order': return 'Paused';
+        case 'Resume order': return 'Resumed';
+        case 'Finish order': return 'Finished';
+        default: return 'Not Started';
+    }
+}
+
+function convertStatusToJSON(internalStatus) {
+    switch(internalStatus) {
+        case 'Started': return 'Start order';
+        case 'Paused': return 'Pause order';
+        case 'Resumed': return 'Resume order';
+        case 'Finished': return 'Finish order';
+        default: return 'Start order';
+    }
+}
+
+function showMessage(elementId, message, duration = 3000) {
+    const element = document.getElementById(elementId);
+    element.textContent = message;
+    if (duration > 0) {
+        setTimeout(() => {
+            element.textContent = '';
+        }, duration);
+    }
+}
+
+function clearMessages() {
+    document.getElementById('errorMsg').textContent = '';
+    document.getElementById('successMsg').textContent = '';
+    document.getElementById('loadingMsg').textContent = '';
+}
+
+async function fetchJSONData() {
+    try {
+        console.log('Fetching JSON data from:', CONFIG.JSON_DATA_URL);
+        const response = await fetch(CONFIG.JSON_DATA_URL + '?t=' + new Date().getTime()); // Cache busting
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('Fetched data:', data);
+        jsonData = data;
+        return data;
+    } catch (error) {
+        console.error('Error fetching JSON data:', error);
+        throw error;
+    }
+}
+
+async function checkStatus() {
+    const workOrder = document.getElementById('workOrder').value.trim();
+    const partNumber = document.getElementById('partNumber').value.trim();
+    const productLine = document.getElementById('productLine').value.trim();
+    const station = document.getElementById('station').value.trim();
+    
+    if (!workOrder || !partNumber || !productLine || !station) {
+        updateStatusDisplay("Not Started");
+        updateButtonStates("Not Started");
+        return;
+    }
+    
+    try {
+        clearMessages();
+        showMessage('loadingMsg', 'Checking status...', 0);
+        
+        const data = await fetchJSONData();
+        
+        const records = data.body || [];
+        console.log('Looking for:', {workOrder, partNumber, station, productLine});
+        console.log('Available records:', records);
+        
+        const matchingRecords = records.filter(record => {
+            const matches = record.WorkOrder === workOrder && 
+                          record.PartNumber === partNumber && 
+                          record.Station === station;
+            
+            if (matches) {
+                console.log('Found matching record:', record);
+            }
+            return matches;
+        });
+        
+        console.log('Matching records:', matchingRecords);
+        
+        if (matchingRecords.length === 0) {
+            currentStatus = "Not Started";
+            console.log('No matching records found, status: Not Started');
+        } else {
+            const latestRecord = matchingRecords.reduce((latest, current) => 
+                parseFloat(current.StartTime) > parseFloat(latest.StartTime) ? current : latest
+            );
+            
+            console.log('Latest record:', latestRecord);
+            currentStatus = convertStatusFromJSON(latestRecord.Status);
+            console.log('Converted status:', currentStatus);
+        }
+        
+        updateStatusDisplay(currentStatus);
+        updateButtonStates(currentStatus);
+        
+        clearMessages();
+        
+    } catch (error) {
+        console.error('Error checking status:', error);
+        showMessage('errorMsg', 'Error checking status. Please try again.');
+        clearMessages();
+    }
+}
+
+function debouncedStatusCheck() {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(checkStatus, 500);
+}
+
+function updateStatusDisplay(status) {
+    const statusDisplay = document.getElementById("statusDisplay");
+    statusDisplay.textContent = "Status: " + status;
+    
+    statusDisplay.style.color = getStatusColor(status);
+}
+
+function getStatusColor(status) {
+    switch(status) {
+        case 'Started': case 'Resumed': return '#4CAF50';
+        case 'Paused': return '#f0ad4e';
+        case 'Finished': return '#d9534f';
+        default: return '#333';
+    }
+}
+
+function updateButtonStates(status) {
+    const startBtn = document.getElementById('startBtn');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const resumeBtn = document.getElementById('resumeBtn');
+    const finishBtn = document.getElementById('finishBtn');
+    
+
+    [startBtn, pauseBtn, resumeBtn, finishBtn].forEach(btn => {
+        btn.disabled = false;
+        btn.style.opacity = '1';
+    });
+    
+    switch(status) {
+        case 'Not Started':
+            pauseBtn.disabled = true;
+            resumeBtn.disabled = true;
+            finishBtn.disabled = true;
+            break;
+        case 'Started':
+        case 'Resumed':
+            startBtn.disabled = true;
+            resumeBtn.disabled = true;
+            break;
+        case 'Paused':
+            startBtn.disabled = true;
+            pauseBtn.disabled = true;
+            break;
+        case 'Finished':
+            [startBtn, pauseBtn, resumeBtn, finishBtn].forEach(btn => {
+                btn.disabled = true;
+            });
+            break;
+    }
+    
+    [startBtn, pauseBtn, resumeBtn, finishBtn].forEach(btn => {
+        if (btn.disabled) {
+            btn.style.opacity = '0.5';
+        }
+    });
+}
+
+function handleAction(action) {
+    const workOrder = document.getElementById('workOrder').value.trim();
+    const partNumber = document.getElementById('partNumber').value.trim();
+    const productLine = document.getElementById('productLine').value.trim();
+    const station = document.getElementById('station').value.trim();
+    const formLink = document.getElementById('formLink');
+    
+    clearMessages();
+    formLink.innerHTML = '';
+
+    if (!workOrder || !partNumber || !productLine || !station) {
+        showMessage('errorMsg', 'Please enter Work Order, Part Number, Product Line, and Station.');
+        return;
+    }
+
+    if (action === 'start' && currentStatus !== 'Not Started') {
+        showMessage('errorMsg', 'Order has already been started.');
+        return;
+    }
+
+    if ((action === 'pause' || action === 'finish') && currentStatus === 'Not Started') {
+        showMessage('errorMsg', `Cannot ${action} order because it has not been started.`);
+        return;
+    }
+
+    if (action === 'resume' && currentStatus !== 'Paused') {
+        showMessage('errorMsg', 'Cannot resume order because it is not paused.');
+        return;
+    }
+
+    const link = CONFIG.FORM_URLS[action];
+    const linkElement = document.createElement("a");
+    linkElement.href = link;
+    linkElement.target = "_blank";
+    linkElement.textContent = "Open " + action.charAt(0).toUpperCase() + action.slice(1) + " Form";
+    
+    linkElement.onclick = function () {
+        showMessage('successMsg', `${action.charAt(0).toUpperCase() + action.slice(1)} form opened. Status will update after form submission.`);
+        
+        setTimeout(() => {
+            checkStatus();
+        }, 5000); // Increased to 5 seconds for GitHub Pages
+    };
+    
+    formLink.appendChild(linkElement);
+}
+
+document.addEventListener("DOMContentLoaded", function () {
+    updateStatusDisplay("Not Started");
+    updateButtonStates("Not Started");
+    
+    fetchJSONData().catch(error => {
+        console.error('Initial data fetch failed:', error);
+    });
+});
+
+// Increased interval for GitHub Pages (which has slower updates)
+setInterval(() => {
+    console.log('Auto-refreshing data...');
+    fetchJSONData().then(() => {
+        const workOrder = document.getElementById('workOrder').value.trim();
+        const partNumber = document.getElementById('partNumber').value.trim();
+        const productLine = document.getElementById('productLine').value.trim();
+        const station = document.getElementById('station').value.trim();
+        
+        if (workOrder && partNumber && productLine && station) {
+            checkStatus();
+        }
+    }).catch(error => {
+        console.error('Auto-refresh failed:', error);
+    });
+}, 30000); // Check every 30 seconds instead of 10 for GitHub Pages
+</script>
+
+</body>
+</html>
