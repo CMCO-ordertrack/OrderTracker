@@ -177,9 +177,9 @@
 
 <script>
 const CONFIG = {
-    // GitHub Pages will serve the JSON file directly
-    JSON_DATA_URL: "order_statuses.json",
-    
+
+    JSON_DATA_URL: "https://prod-84.westus.logic.azure.com:443/workflows/5a1a827498de43d7a2a79f4bea9fa8a9/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=MGwClbLOhTeDexH9m-z2ocsyyXFWquG3WypxGJ-cvEM",
+    //microsoft forms with hardcoded status selection
     FORM_URLS: {
         start: "https://forms.office.com/Pages/ResponsePage.aspx?id=bJDaWsWrmkin1el3TfKTOrXFXAOaO9VHv8sfFTPvnKFUNlhBR0U5UzdMOEhRODRWNzQ0ODRRU1hDRiQlQCN0PWcu&rc98df112c78e4102ae532905b6d4a89f=%22Start%20order%22",
         pause: "https://forms.office.com/Pages/ResponsePage.aspx?id=bJDaWsWrmkin1el3TfKTOrXFXAOaO9VHv8sfFTPvnKFUNlhBR0U5UzdMOEhRODRWNzQ0ODRRU1hDRiQlQCN0PWcu&rc98df112c78e4102ae532905b6d4a89f=%22Pause%20order%22",
@@ -231,14 +231,28 @@ function clearMessages() {
 async function fetchJSONData() {
     try {
         console.log('Fetching JSON data from:', CONFIG.JSON_DATA_URL);
-        const response = await fetch(CONFIG.JSON_DATA_URL + '?t=' + new Date().getTime()); // Cache busting
+        const response = await fetch(CONFIG.JSON_DATA_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({}) // Empty body for POST request
+        });
+        
+        console.log('Response status:', response.status);
+        
         if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+            const errorText = await response.text();
+            console.log('Error response text:', errorText);
+            throw new Error(`HTTP error! status: ${response.status}, text: ${errorText}`);
         }
         
-        const data = await response.json();
-        console.log('Fetched data:', data);
-        jsonData = data;
+        const responseText = await response.text();
+        console.log('Raw response text:', responseText);
+        
+        const data = JSON.parse(responseText);
+        console.log('Parsed data:', data);
+        jsonData = data; // Store the data globally
         return data;
     } catch (error) {
         console.error('Error fetching JSON data:', error);
@@ -285,6 +299,7 @@ async function checkStatus() {
             currentStatus = "Not Started";
             console.log('No matching records found, status: Not Started');
         } else {
+            // Find most recent data
             const latestRecord = matchingRecords.reduce((latest, current) => 
                 parseFloat(current.StartTime) > parseFloat(latest.StartTime) ? current : latest
             );
@@ -326,7 +341,7 @@ function getStatusColor(status) {
         default: return '#333';
     }
 }
-
+//change which buttons can be pressed based on statuses
 function updateButtonStates(status) {
     const startBtn = document.getElementById('startBtn');
     const pauseBtn = document.getElementById('pauseBtn');
@@ -367,7 +382,7 @@ function updateButtonStates(status) {
         }
     });
 }
-
+// status logic
 function handleAction(action) {
     const workOrder = document.getElementById('workOrder').value.trim();
     const partNumber = document.getElementById('partNumber').value.trim();
@@ -398,17 +413,24 @@ function handleAction(action) {
         return;
     }
 
-    // Open the form directly
+    // Create form link
     const link = CONFIG.FORM_URLS[action];
-    window.open(link, '_blank');
+    const linkElement = document.createElement("a");
+    linkElement.href = link;
+    linkElement.target = "_blank";
+    linkElement.textContent = "Open " + action.charAt(0).toUpperCase() + action.slice(1) + " Form";
     
-    showMessage('successMsg', `${action.charAt(0).toUpperCase() + action.slice(1)} form opened. Status will update after form submission.`);
+    linkElement.onclick = function () {
+        showMessage('successMsg', `${action.charAt(0).toUpperCase() + action.slice(1)} form opened. Status will update after form submission.`);
+        
+        setTimeout(() => {
+            checkStatus();
+        }, 3000);
+    };
     
-    setTimeout(() => {
-        checkStatus();
-    }, 5000); // Increased to 5 seconds for GitHub Pages
+    formLink.appendChild(linkElement);
 }
-
+// retrieving and updating status from json file
 document.addEventListener("DOMContentLoaded", function () {
     updateStatusDisplay("Not Started");
     updateButtonStates("Not Started");
@@ -418,7 +440,6 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 });
 
-// Increased interval for GitHub Pages (which has slower updates)
 setInterval(() => {
     console.log('Auto-refreshing data...');
     fetchJSONData().then(() => {
@@ -433,7 +454,7 @@ setInterval(() => {
     }).catch(error => {
         console.error('Auto-refresh failed:', error);
     });
-}, 30000); // Check every 30 seconds instead of 10 for GitHub Pages
+}, 10000);
 </script>
 
 </body>
