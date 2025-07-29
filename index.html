@@ -368,6 +368,7 @@ function updateButtonStates(status) {
         case 'Paused':
             startBtn.disabled = true;
             pauseBtn.disabled = true;
+            finishBtn.disabled = true;
             break;
         case 'Finished':
             [startBtn, pauseBtn, resumeBtn, finishBtn].forEach(btn => {
@@ -410,6 +411,11 @@ function handleAction(action) {
 
     if (action === 'resume' && currentStatus !== 'Paused') {
         showMessage('errorMsg', 'Cannot resume order because it is not paused.');
+        return;
+    }
+
+    if (action === 'finish' && currentStatus === 'Paused') {
+        showMessage('errorMsg', 'Cannot finish order while it is paused. Please resume first.');
         return;
     }
 
