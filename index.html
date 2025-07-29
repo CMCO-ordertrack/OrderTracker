@@ -389,10 +389,7 @@ function handleAction(action) {
     const partNumber = document.getElementById('partNumber').value.trim();
     const productLine = document.getElementById('productLine').value.trim();
     const station = document.getElementById('station').value.trim();
-    const formLink = document.getElementById('formLink');
-    
     clearMessages();
-    formLink.innerHTML = '';
 
     if (!workOrder || !partNumber || !productLine || !station) {
         showMessage('errorMsg', 'Please enter Work Order, Part Number, Product Line, and Station.');
