@@ -299,10 +299,12 @@ async function checkStatus() {
             currentStatus = "Not Started";
             console.log('No matching records found, status: Not Started');
         } else {
-            // Find most recent data
-            const latestRecord = matchingRecords.reduce((latest, current) => 
-                parseFloat(current.StartTime) > parseFloat(latest.StartTime) ? current : latest
-            );
+            // Find most recent data by converting date strings to Date objects
+            const latestRecord = matchingRecords.reduce((latest, current) => {
+                const latestTime = new Date(latest.StartTime);
+                const currentTime = new Date(current.StartTime);
+                return currentTime > latestTime ? current : latest;
+            });
             
             console.log('Latest record:', latestRecord);
             currentStatus = convertStatusFromJSON(latestRecord.Status);
